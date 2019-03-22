@@ -55,6 +55,7 @@ func mainApp(ctx context.Context, opts options, args []string) error {
 	if err != nil {
 		return errors.Wrap(err, "chooseInputStream")
 	}
+
 	defer func() {
 		if closeErr := input.Close(); closeErr != nil {
 			mustFprintf(os.Stderr, "WARN: input.Close: %v\n", closeErr)
@@ -66,30 +67,27 @@ func mainApp(ctx context.Context, opts options, args []string) error {
 		return errors.Wrap(err, "chooseOutputStream")
 	}
 
-	defer func() {
-		if closeErr := output.Close(); closeErr != nil {
-			mustFprintf(os.Stderr, "WARN: output.Close: %v\n", closeErr)
-		}
-	}()
+	err = decorateScript(input, output)
 
-	runTheScript := opts.Output == ""
-	scriptToRun := output.(*os.File).Name()
-
-	if runTheScript {
-		defer func() {
-			if rmErr := os.Remove(scriptToRun); rmErr != nil {
-				mustFprintf(os.Stderr, "WARN: os.Remove: %v\n", rmErr)
-			}
-		}()
+	if closeErr := output.Close(); err != nil {
+		mustFprintf(os.Stderr, "WARN: output.Close: %v\n", closeErr)
 	}
 
-	if err = decorateScript(input, output); err != nil {
+	if err != nil {
 		return err
 	}
 
-	if !runTheScript {
+	if opts.Output != "" {
 		return nil
 	}
+
+	scriptToRun := output.(*os.File).Name()
+
+	defer func() {
+		if rmErr := os.Remove(scriptToRun); rmErr != nil {
+			mustFprintf(os.Stderr, "WARN: os.Remove: %v\n", rmErr)
+		}
+	}()
 
 	scriptPath, err := filepath.Abs(scriptToRun)
 	if err != nil {
